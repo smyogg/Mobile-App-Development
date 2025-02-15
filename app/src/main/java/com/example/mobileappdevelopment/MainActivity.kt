@@ -1,4 +1,4 @@
-package com.example.madproject
+package com.example.mobileappdevelopment
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -43,10 +43,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun GameScreen() {
-    val cells = remember { mutableStateListOf(*Array(9) { "" }) }
-    val currentPlayer = remember { mutableStateOf("X") }
-    val gameActive = remember { mutableStateOf(true) }
-    val winningLine = remember { mutableStateOf<List<Int>?>(null) }
+    val gameBoard = remember { mutableStateListOf(*Array(9) { "" }) }
+    val currentPlayerSymbol = remember { mutableStateOf("X") }
+    val isGameActive = remember { mutableStateOf(true) }
+    val winningIndices = remember { mutableStateOf<List<Int>?>(null) }
 
     Column(
         modifier = Modifier
@@ -57,9 +57,9 @@ fun GameScreen() {
     ) {
         Text(
             text = when {
-                winningLine.value != null -> "Player ${cells[winningLine.value!![0]]} Wins!"
-                !gameActive.value -> "Game Draw!"
-                else -> "Player ${currentPlayer.value}'s Turn"
+                winningIndices.value != null -> "Player ${gameBoard[winningIndices.value!![0]]} Wins!"
+                !isGameActive.value -> "Game Draw!"
+                else -> "Player ${currentPlayerSymbol.value}'s Turn"
             },
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
@@ -67,55 +67,59 @@ fun GameScreen() {
         )
 
         Box(modifier = Modifier.size(300.dp)) {
-            Board(cells, gameActive.value, winningLine.value) { index ->
-                if (gameActive.value && cells[index].isEmpty()) {
-                    cells[index] = currentPlayer.value
-                    val winIndices = checkWinner(cells)
+            GameBoard(
+                boardState = gameBoard,
+                isGameActive = isGameActive.value,
+                winningIndices = winningIndices.value
+            ) { index ->
+                if (isGameActive.value && gameBoard[index].isEmpty()) {
+                    gameBoard[index] = currentPlayerSymbol.value
+                    val winIndices = checkWinner(gameBoard)
                     if (winIndices != null) {
-                        gameActive.value = false
-                        winningLine.value = winIndices
-                    } else if (isBoardFull(cells)) {
-                        gameActive.value = false
+                        isGameActive.value = false
+                        winningIndices.value = winIndices
+                    } else if (isBoardFull(gameBoard)) {
+                        isGameActive.value = false
                     } else {
-                        currentPlayer.value = if (currentPlayer.value == "X") "O" else "X"
+                        currentPlayerSymbol.value = if (currentPlayerSymbol.value == "X") "O" else "X"
                     }
                 }
             }
         }
         Button(
             onClick = {
-                cells.replaceAll { "" }
-                currentPlayer.value = "X"
-                gameActive.value = true
-                winningLine.value = null
+                gameBoard.indices.forEach { index -> gameBoard[index] = "" }
+                currentPlayerSymbol.value = "X"
+                isGameActive.value = true
+                winningIndices.value = null
             },
             modifier = Modifier.padding(16.dp)
         ) {
-            Text("Reset Game")
+            Text("Reset Game", color = Color.White)
         }
     }
 }
 
 @Composable
-fun Board(
-    cells: List<String>,
-    gameActive: Boolean,
-    winningLine: List<Int>?,
+fun GameBoard(
+    boardState: List<String>,
+    isGameActive: Boolean,
+    winningIndices: List<Int>?,
     onCellClick: (Int) -> Unit
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         modifier = Modifier.size(300.dp)
     ) {
-        itemsIndexed(cells) { index, cell ->
+        itemsIndexed(boardState) { index, symbol ->
             val row = index / 3
             val col = index % 3
             Box(
                 modifier = Modifier
                     .size(100.dp)
                     .background(
-                        if (winningLine?.contains(index) == true) Color.Red.copy(alpha = 0.3f)
-                        else Color.White
+                        if (winningIndices?.contains(index) == true) Color.Yellow.copy(alpha = 0.3f)
+                        else Color.LightGray
                     )
                     .clickable { onCellClick(index) }
                     .drawGridBorders(row, col)
@@ -123,14 +127,19 @@ fun Board(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = cell,
+                    text = symbol,
                     fontSize = 40.sp,
-                    color = if (cell == "X") Color.Red else Color.Blue
+                    color = when (symbol) {
+                        "X" -> Color(0xFF6A1B9A) // Dark Purple
+                        "O" -> Color(0xFF009688)  // Teal
+                        else -> Color.Transparent
+                    }
                 )
             }
         }
     }
 }
+
 fun Modifier.drawGridBorders(row: Int, col: Int): Modifier = this.then(
     drawWithContent {
         drawContent()
@@ -138,50 +147,51 @@ fun Modifier.drawGridBorders(row: Int, col: Int): Modifier = this.then(
         // Draw right border if not last column
         if (col < 2) {
             drawLine(
-                color = Color.Black,
+                color = Color.DarkGray,
                 start = Offset(size.width - 1f, 0f),
                 end = Offset(size.width - 1f, size.height),
-                strokeWidth = 10f
+                strokeWidth = 4f
             )
         }
 
         // Draw bottom border if not last row
         if (row < 2) {
             drawLine(
-                color = Color.Black,
+                color = Color.DarkGray,
                 start = Offset(0f, size.height - 1f),
                 end = Offset(size.width, size.height - 1f),
-                strokeWidth = 10f
+                strokeWidth = 4f
             )
         }
     }
 )
-fun checkWinner(cells: List<String>): List<Int>? {
+
+fun checkWinner(boardState: List<String>): List<Int>? {
     // Check rows
     for (i in 0..6 step 3) {
-        if (cells[i].isNotEmpty() && cells[i] == cells[i+1] && cells[i] == cells[i+2]) {
+        if (boardState[i].isNotEmpty() && boardState[i] == boardState[i+1] && boardState[i] == boardState[i+2]) {
             return listOf(i, i+1, i+2)
         }
     }
 
     // Check columns
     for (i in 0..2) {
-        if (cells[i].isNotEmpty() && cells[i] == cells[i+3] && cells[i] == cells[i+6]) {
-            return listOf(i,i+3,i+6)
+        if (boardState[i].isNotEmpty() && boardState[i] == boardState[i+3] && boardState[i] == boardState[i+6]) {
+            return listOf(i, i+3, i+6)
         }
     }
 
     // Check diagonals
-    if (cells[0].isNotEmpty() && cells[0] == cells[4] && cells[0] == cells[8]){
-        return listOf(0,4,8)
+    if (boardState[0].isNotEmpty() && boardState[0] == boardState[4] && boardState[0] == boardState[8]) {
+        return listOf(0, 4, 8)
     }
-    if (cells[2].isNotEmpty() && cells[2] == cells[4] && cells[2] == cells[6]){
-        return listOf(2,4,6)
+    if (boardState[2].isNotEmpty() && boardState[2] == boardState[4] && boardState[2] == boardState[6]) {
+        return listOf(2, 4, 6)
     }
 
     return null
 }
 
-fun isBoardFull(cells: List<String>): Boolean {
-    return cells.none { it.isEmpty() }
+fun isBoardFull(boardState: List<String>): Boolean {
+    return boardState.none { it.isEmpty() }
 }
